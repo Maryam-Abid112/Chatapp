@@ -7,6 +7,8 @@ const dotenv = require("dotenv");
 const userroute=require("./routes/Userroutes");
 const socketauth=require("./middleauth/socketauth");
 const sockethadler =require("./socket/sockethandler");
+const chatroute =require("./routes/chatroutes");
+
 
 dotenv.config();
 const app = express();
@@ -17,6 +19,7 @@ app.use(express.json());
 
 // defining routes for the api
 app.use("/api/Users",userroute);
+app.use("/api/Chats",chatroute);
 
 app.get("/", (req, res) => {
   res.send("API Running...");

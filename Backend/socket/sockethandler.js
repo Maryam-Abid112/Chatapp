@@ -1,4 +1,5 @@
-const message = require("../models/Messages");
+const Message = require("../models/Messages");
+const Chat = require("../models/Chats");
 
 
 // object for the online users 
@@ -12,45 +13,48 @@ const socketHandler = (io) => {
 
    io.on("connection", (socket) => {
 
-      onlineUsers[socket.userId] = socket.id;
+      onlineUsers[socket.user] = socket.id;
 
       console.log("User connected");
+     
+      // join chat room 
+      socket.on("join_chat", (chatId) => {
+      socket.join(chatId);
+    });
+
 
       // now sending the messages
+      socket.on("send_messages", async ({ chatId, text }) => {
+      try {
+        // save message
+        const newMessage = await Message.create({
+          sender: socket.user,
+          chatId: chatId,
+          text: text
+        });
 
-      socket.on("send messages", async ({ recieverid, messages }) => {
+        // update last message
+        await Chat.findByIdAndUpdate(chatId, {
+          lastMessage: newMessage._id
+        });
 
-         //checking whether it is online or not 
-         const recieversoketid = onlineUsers[recieverid];
+        // populate sender
+        const fullMessage = await Message.findById(newMessage._id)
+          .populate("sender", "name email");
 
-         // store the message in database
-         const newmessage = await message.create({
-            sender: socket.userId,
-            recieverid,
-            text: message
-         })
+        // 🔥 emit to room
+        io.to(chatId).emit("receive_message", fullMessage);
 
+      } catch (err) {
+        console.log("Socket error:", err.message);
+      }
+    });
 
-
-         // if user online then send message
-         if (recieversoketid) {
-            io.to(recieversoketid).emit("recieve message", {
-               senderid: socket.userId,
-               message
-
-            });
-
-         }
-
-      })
-
-
-      // disconnecting the user
-      socket.on("disconnect", () => {
-         delete onlineUsers[socket.userId];
-      });
-
-   });
+    socket.on("disconnect", () => {
+      delete onlineUsers[socket.user];
+      console.log("User disconnected");
+    });
+  });
 
 
 

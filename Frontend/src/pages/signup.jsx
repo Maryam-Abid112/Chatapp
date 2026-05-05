@@ -21,9 +21,10 @@ const SignUp = () => {
         password:password
       });
       // saves the token to localstorage for further use
-      localStorage.setItem("Token",JSON.stringify(res.data.token));
-      console.log("response",res.data);
-      success=true;
+      localStorage.setItem("token", res.data.token);
+      localStorage.removeItem("Token");
+      console.log("response", res.data);
+      success = true;
 
       
 

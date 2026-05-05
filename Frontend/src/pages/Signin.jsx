@@ -20,8 +20,9 @@ const SignIn = () => {
       });
       // saves the token to localstorage for further use
       localStorage.setItem("token", res.data.token);
-      console.log("response",res.data);
-      success=true;
+      localStorage.removeItem("Token");
+      console.log("response", res.data);
+      success = true;
 
     
 
