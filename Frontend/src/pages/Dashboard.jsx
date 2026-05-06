@@ -41,6 +41,7 @@ const Avatar = ({ name = "", id = "", size = "md" }) => (
 );
 
 export default function Dashboard() {
+  const typingTimeoutRef = useRef(null);
 
   const [typingUsers, setTypingUsers] = useState({});
   // ── online users state (socket) ───────────────────────────────────────────
@@ -122,23 +123,20 @@ export default function Dashboard() {
       console.log("online users:", users);
       setOnlineUsers(users);
     });
-    // 🔵 someone is typing
-    socket.on("typing", ({ userId }) => {
-      setTypingUsers((prev) => ({
-        ...prev,
-        [activeChatIdRef.current]: userId
-      }));
-    });
+ socket.on("typing", ({ chatId, userId }) => {
+  setTypingUsers((prev) => ({
+    ...prev,
+    [chatId]: userId
+  }));
+});
 
-    // 🔴 someone stopped typing
-    socket.on("stop_typing", ({ userId }) => {
-      setTypingUsers((prev) => {
-        const updated = { ...prev };
-        delete updated[activeChatIdRef.current];
-        return updated;
-      });
-    });
-
+socket.on("stop_typing", ({ chatId }) => {
+  setTypingUsers((prev) => {
+    const copy = { ...prev };
+    delete copy[chatId];
+    return copy;
+  });
+});
     socket.on("receive_message", (message) => {
       const chatId = normalizeId(message.chatId);
       if (chatId !== normalizeId(activeChatIdRef.current)) return;
@@ -332,6 +330,8 @@ export default function Dashboard() {
     navigate("/login");
   };
 
+  const typingUser = typingUsers[activeChatId];
+
   // ── render ────────────────────────────────────────────────────────────────
   return (
     <div className="nova-shell">
@@ -456,8 +456,12 @@ export default function Dashboard() {
               <div className="nc-header-info">
                 <span className="nc-header-name">{getChatDisplayName(activeChat)}</span>
                 <span className="nc-header-status">
-                  <span className={`nc-status-dot ${isUserOnline(getChatDisplayId(activeChat)) ? "online" : "offline"}`} />
-                  {isUserOnline(getChatDisplayId(activeChat)) ? "Online" : "Offline"}
+                  {typingUser ? "Typing..." : (
+                    <>
+                      <span className={`nc-status-dot ${isUserOnline(getChatDisplayId(activeChat)) ? "online" : "offline"}`} />
+                      {isUserOnline(getChatDisplayId(activeChat)) ? "Online" : "Offline"}
+                    </>
+                  )}
                 </span>
               </div>
               <div className="nc-header-actions">
@@ -508,6 +512,17 @@ export default function Dashboard() {
                 rows={1}
                 onChange={(e) => {
                   setNewMsg(e.target.value);
+
+                  socketRef.current.emit("typing", activeChatId);
+
+                  if (typingTimeoutRef.current) {
+                    clearTimeout(typingTimeoutRef.current);
+                  }
+
+                  typingTimeoutRef.current = setTimeout(() => {
+                    socketRef.current.emit("stop_typing", activeChatId);
+                  }, 1000);
+
                   e.target.style.height = "auto";
                   e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
                 }}
