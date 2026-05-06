@@ -41,6 +41,11 @@ const Avatar = ({ name = "", id = "", size = "md" }) => (
 );
 
 export default function Dashboard() {
+
+  const [typingUsers, setTypingUsers] = useState({});
+  // ── online users state (socket) ───────────────────────────────────────────
+  const [onlineUsers, setOnlineUsers] = useState({});
+
   const navigate = useNavigate();
   const socketRef = useRef(null);
   const activeChatIdRef = useRef(null);
@@ -103,7 +108,7 @@ export default function Dashboard() {
       const payload = JSON.parse(atob(t.split(".")[1]));
       setMyId(normalizeId(payload.id || payload._id || payload.userId));
       setMyName(payload.name || payload.username || "");
-    } catch (_) {}
+    } catch (_) { }
   }, []);
 
   // ── socket setup ──────────────────────────────────────────────────────────
@@ -113,6 +118,26 @@ export default function Dashboard() {
 
     socket.on("connect", () => console.log("Socket connected:", socket.id));
     socket.on("connect_error", (e) => console.log("Socket error:", e.message));
+    socket.on("online_users", (users) => {
+      console.log("online users:", users);
+      setOnlineUsers(users);
+    });
+    // 🔵 someone is typing
+    socket.on("typing", ({ userId }) => {
+      setTypingUsers((prev) => ({
+        ...prev,
+        [activeChatIdRef.current]: userId
+      }));
+    });
+
+    // 🔴 someone stopped typing
+    socket.on("stop_typing", ({ userId }) => {
+      setTypingUsers((prev) => {
+        const updated = { ...prev };
+        delete updated[activeChatIdRef.current];
+        return updated;
+      });
+    });
 
     socket.on("receive_message", (message) => {
       const chatId = normalizeId(message.chatId);
@@ -230,39 +255,44 @@ export default function Dashboard() {
     }
   };
 
-  // ── send message (auto-creates chat if none) ─────────────────────────────
- const sendMessage = () => {
-  const text = newMsg.trim();
-  if (!text || !activeChatId || !socketRef.current) return;
-
-  const tempMessage = {
-    _id: `temp-${Date.now()}`,
-    text,
-    sender: { _id: myId, name: myName },
-    chatId: activeChatId,
-    createdAt: new Date().toISOString(),
-    pending: true,
+  const isUserOnline = (userId) => {
+    const id = normalizeId(userId);
+    return !!onlineUsers[id];
   };
 
-  // 🔥 Optimistic UI (instant message)
-  setMessages((prev) => [...(prev || []), tempMessage]);
+  // ── send message (auto-creates chat if none) ─────────────────────────────
+  const sendMessage = () => {
+    const text = newMsg.trim();
+    if (!text || !activeChatId || !socketRef.current) return;
 
-  setChats((prev) =>
-    prev.map((c) =>
-      c._id === activeChatId
-        ? { ...c, lastMessage: { text, createdAt: tempMessage.createdAt } }
-        : c
-    )
-  );
+    const tempMessage = {
+      _id: `temp-${Date.now()}`,
+      text,
+      sender: { _id: myId, name: myName },
+      chatId: activeChatId,
+      createdAt: new Date().toISOString(),
+      pending: true,
+    };
 
-  // 🔥 send to backend via socket
-  socketRef.current.emit("send_messages", {
-    chatId: activeChatId,
-    text,
-  });
+    // 🔥 Optimistic UI (instant message)
+    setMessages((prev) => [...(prev || []), tempMessage]);
 
-  setNewMsg("");
-};
+    setChats((prev) =>
+      prev.map((c) =>
+        c._id === activeChatId
+          ? { ...c, lastMessage: { text, createdAt: tempMessage.createdAt } }
+          : c
+      )
+    );
+
+    // 🔥 send to backend via socket
+    socketRef.current.emit("send_messages", {
+      chatId: activeChatId,
+      text,
+    });
+
+    setNewMsg("");
+  };
 
   const handleMsgKey = (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
@@ -426,8 +456,8 @@ export default function Dashboard() {
               <div className="nc-header-info">
                 <span className="nc-header-name">{getChatDisplayName(activeChat)}</span>
                 <span className="nc-header-status">
-                  <span className="nc-status-dot" />
-                  Active now
+                  <span className={`nc-status-dot ${isUserOnline(getChatDisplayId(activeChat)) ? "online" : "offline"}`} />
+                  {isUserOnline(getChatDisplayId(activeChat)) ? "Online" : "Offline"}
                 </span>
               </div>
               <div className="nc-header-actions">
