@@ -69,3 +69,48 @@ exports.accessChat = async (req, res) => {
       res.status(500).json({ message: err.message });
     }
 };
+
+
+exports.createGroupChat = async (req, res) => {
+  const userId = new mongoose.Types.ObjectId(req.user._id);
+  const { name, users } = req.body; 
+  // users = array of userIds (NOT including creator necessarily)
+
+  try {
+    if (!name || !users || users.length < 2) {
+      return res.status(400).json({
+        message: "Group must have a name and at least 2 users",
+      });
+    }
+
+    // include creator in group automatically
+    const members = [
+      userId,
+      ...users.map((id) => new mongoose.Types.ObjectId(id)),
+    ];
+
+    // optional: prevent duplicate group with same members + name
+    let group = await Chat.findOne({
+      isGroup: true,
+      chatName: name,
+      members: { $all: members },
+    }).populate("members", "name email");
+
+    if (!group) {
+      group = await Chat.create({
+        chatName: name,
+        members,
+        isGroup: true,
+      });
+
+      group = await Chat.findById(group._id).populate(
+        "members",
+        "name email"
+      );
+    }
+
+    res.json(group);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

@@ -587,3 +587,121 @@ body {
   .nc-msg-row { max-width: 88%; }
   .nc-input-area { padding: 12px 12px 16px; }
 }
+
+/* ═══════════════════════════════════════
+   CREATE CHAT OVERLAY
+═══════════════════════════════════════ */
+.nc-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  backdrop-filter: blur(6px);
+}
+
+/* panel */
+.nc-panel {
+  width: 360px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: pop 0.2s ease;
+}
+
+@keyframes pop {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* header */
+.nc-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 14px;
+}
+
+.nc-panel-header button {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+/* inputs */
+.nc-panel-input {
+  padding: 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  outline: none;
+}
+
+/* user list */
+.nc-user-list {
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nc-user-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: 0.2s;
+}
+
+.nc-user-item:hover {
+  background: var(--bg-card-hover);
+}
+
+.nc-user-item.active {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
+
+.nc-user-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.nc-user-info span {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.nc-user-info small {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* button */
+.nc-create-btn {
+  padding: 10px;
+  background: var(--accent);
+  border: none;
+  color: white;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.nc-create-btn:hover {
+  background: var(--accent-light);
+}

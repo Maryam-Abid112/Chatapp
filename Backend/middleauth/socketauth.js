@@ -6,7 +6,6 @@ const socketAuth = (socket, next) => {
    if (!token) {
       return next(new Error("Unauthorized"));
    }
-
    try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       socket.user = decoded.id;   // attach user id

@@ -41,6 +41,11 @@ const Avatar = ({ name = "", id = "", size = "md" }) => (
 );
 
 export default function Dashboard() {
+
+  const [showCreatePanel, setShowCreatePanel] = useState(false);
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [groupName, setGroupName] = useState("");
+
   const typingTimeoutRef = useRef(null);
 
   const [typingUsers, setTypingUsers] = useState({});
@@ -123,20 +128,20 @@ export default function Dashboard() {
       console.log("online users:", users);
       setOnlineUsers(users);
     });
- socket.on("typing", ({ chatId, userId }) => {
-  setTypingUsers((prev) => ({
-    ...prev,
-    [chatId]: userId
-  }));
-});
+    socket.on("typing", ({ chatId, userId }) => {
+      setTypingUsers((prev) => ({
+        ...prev,
+        [chatId]: userId
+      }));
+    });
 
-socket.on("stop_typing", ({ chatId }) => {
-  setTypingUsers((prev) => {
-    const copy = { ...prev };
-    delete copy[chatId];
-    return copy;
-  });
-});
+    socket.on("stop_typing", ({ chatId }) => {
+      setTypingUsers((prev) => {
+        const copy = { ...prev };
+        delete copy[chatId];
+        return copy;
+      });
+    });
     socket.on("receive_message", (message) => {
       const chatId = normalizeId(message.chatId);
       if (chatId !== normalizeId(activeChatIdRef.current)) return;
@@ -253,6 +258,78 @@ socket.on("stop_typing", ({ chatId }) => {
     }
   };
 
+  // for group chat creation
+  const createGroupChat = async (groupName, users) => {
+    try {
+      const res = await axios.post(
+        `${API}/api/Chats/creategroup`,
+        {
+          name: groupName,
+          users: users, // array of user IDs
+        },
+        { headers: authHeader() }
+      );
+
+      const newGroup = res.data;
+
+      setChats((prev) => [newGroup, ...prev]);
+      selectChat(newGroup);
+    } catch (e) {
+      handleAuthError(e);
+    }
+  };
+
+const handleCreateGroup = async () => {
+
+  if (selectedUsers.length === 0) {
+    alert("Select users first");
+    return;
+  }
+
+  try {
+
+    // ✅ only one user → create DM
+    if (selectedUsers.length === 1) {
+
+      const userId = selectedUsers[0];
+
+      const res = await axios.post(
+        `${API}/api/Chats/accesschat`,
+        { userId },
+        { headers: authHeader() }
+      );
+
+      const chat = res.data;
+
+      setChats((prev) => {
+        const exists = prev.find((c) => c._id === chat._id);
+        return exists ? prev : [chat, ...prev];
+      });
+
+      selectChat(chat);
+    }
+
+    // ✅ multiple users → create group
+    else {
+
+      await createGroupChat(
+        groupName || "New Group",
+        selectedUsers
+      );
+    }
+
+    // reset panel
+    setShowCreatePanel(false);
+    setSelectedUsers([]);
+    setGroupName("");
+    setSearchResults([]);
+
+  } catch (e) {
+    handleAuthError(e);
+  }
+};
+
+
   const isUserOnline = (userId) => {
     const id = normalizeId(userId);
     return !!onlineUsers[id];
@@ -324,6 +401,16 @@ socket.on("stop_typing", ({ chatId }) => {
     return normalizeId(other) || chat._id;
   };
 
+  // selecting the users for group chat creation
+
+  const toggleUserSelect = (userId) => {
+  setSelectedUsers((prev) =>
+    prev.includes(userId)
+      ? prev.filter((id) => id !== userId)
+      : [...prev, userId]
+  );
+};
+
   // ── logout ────────────────────────────────────────────────────────────────
   const logout = () => {
     localStorage.removeItem("token");
@@ -335,16 +422,84 @@ socket.on("stop_typing", ({ chatId }) => {
   // ── render ────────────────────────────────────────────────────────────────
   return (
     <div className="nova-shell">
+      {showCreatePanel && (
+  <div className="nc-overlay" onClick={() => setShowCreatePanel(false)}>
+    <div className="nc-panel" onClick={(e) => e.stopPropagation()}>
+
+      <div className="nc-panel-header">
+        <h3>Create Chat / Group</h3>
+        <button onClick={() => setShowCreatePanel(false)}>✕</button>
+      </div>
+
+      {/* group name */}
+      <input
+        className="nc-panel-input"
+        placeholder="Group name (optional)"
+        value={groupName}
+        onChange={(e) => setGroupName(e.target.value)}
+      />
+
+      {/* search */}
+      <input
+        className="nc-panel-input"
+        placeholder="Search users..."
+        onChange={async (e) => {
+          const q = e.target.value;
+
+          const res = await axios.get(`${API}/api/Users/getalluser`, {
+            headers: authHeader(),
+          });
+
+          setSearchResults(
+            res.data.filter(
+              (u) =>
+                u._id !== myId &&
+                u.name?.toLowerCase().includes(q.toLowerCase())
+            )
+          );
+        }}
+      />
+
+      {/* users list */}
+      <div className="nc-user-list">
+        {searchResults.map((user) => (
+          <div
+            key={user._id}
+            className={`nc-user-item ${
+              selectedUsers.includes(user._id) ? "active" : ""
+            }`}
+            onClick={() => toggleUserSelect(user._id)}
+          >
+            <Avatar name={user.name} id={user._id} size="sm" />
+            <div className="nc-user-info">
+              <span>{user.name}</span>
+              <small>{user.email}</small>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* create button */}
+      <button className="nc-create-btn" onClick={handleCreateGroup}>
+        Create Chat / Group
+      </button>
+    </div>
+  </div>
+)}
       {/* ── SIDEBAR ── */}
       <aside className="nova-sidebar">
         {/* Header */}
         <div className="ns-header">
           <div className="ns-brand">
-            <span className="ns-brand-name">Nova</span>
+            <span className="ns-brand-name">Talkhub</span>
             {myName && <span className="ns-user-name"> - {myName}</span>}
             <div className="ns-header-actions">
-              <button className="ns-icon-btn" title="New chat">✏️</button>
-              <button className="ns-icon-btn ns-logout-btn" onClick={logout} title="Logout">⎋</button>
+              <button className="ns-icon-btn" title="New chat" onClick={() => setShowCreatePanel(true)}>
+                ✏️
+              </button>
+              <button className="ns-icon-btn ns-logout-btn" onClick={logout} title="Logout">
+                ⎋
+              </button>
             </div>
           </div>
 
@@ -445,7 +600,7 @@ socket.on("stop_typing", ({ chatId }) => {
         {!activeChat ? (
           <div className="nc-empty">
             <div className="nc-empty-icon">✦</div>
-            <h2 className="nc-empty-title">Welcome to Nova</h2>
+            <h2 className="nc-empty-title">Welcome to Talkhub</h2>
             <p className="nc-empty-sub">Search for someone or select a chat to begin</p>
           </div>
         ) : (
