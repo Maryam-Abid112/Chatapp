@@ -4,12 +4,7 @@
 
 ### Real-Time Chat Application using MERN Stack & Socket.IO
 
-<p align="center">
-  <img src="https://img.shields.io/badge/MERN-FullStack-green?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Socket.IO-RealTime-black?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/React-Frontend-blue?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Node.js-Backend-success?style=for-the-badge" />
-</p>
+
 
 </div>
 
