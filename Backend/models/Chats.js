@@ -22,6 +22,12 @@ const chatSchema = new mongoose.Schema(
         lastMessage: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Message"
+        },
+
+        unreadCounts: {
+            type: Map,
+            of: Number,
+            default: {}
         }
     },
     { timestamps: true }

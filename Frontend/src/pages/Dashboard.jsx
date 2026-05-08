@@ -31,6 +31,11 @@ function formatTime(dateStr) {
   return d.toLocaleDateString([], { weekday: "short" });
 }
 
+const EMOJI_LIST = [
+  "😀","😂","😍","🥲","😭","😎","😉","😅","🤣","😊",
+  "👍","🙏","🙌","💯","🎉","🥳","😇","😡","😱","❤️"
+];
+
 const Avatar = ({ name = "", id = "", size = "md" }) => (
   <div
     className={`avatar avatar-${size}`}
@@ -57,6 +62,9 @@ export default function Dashboard() {
   const activeChatIdRef = useRef(null);
   const messagesEndRef = useRef(null);
   const searchRef = useRef(null);
+  const emojiPickerRef = useRef(null);
+  const emojiToggleRef = useRef(null);
+  const emojiInputRef = useRef(null);
 
   // ── state ──────────────────────────────────────────────────────────────────
   const [myId, setMyId] = useState(null);
@@ -77,6 +85,7 @@ export default function Dashboard() {
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState("");
   const [sending, setSending] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   // ── helpers ────────────────────────────────────────────────────────────────
   const token = () => localStorage.getItem("token");
@@ -95,6 +104,14 @@ export default function Dashboard() {
       return "";
     }
     return String(id);
+  };
+
+  const promoteChat = (chatList, chatId, patch = {}) => {
+    const normalizedId = normalizeId(chatId);
+    const target = chatList.find((c) => normalizeId(c._id) === normalizedId);
+    if (!target) return chatList;
+    const updated = { ...target, ...patch };
+    return [updated, ...chatList.filter((c) => normalizeId(c._id) !== normalizedId)];
   };
 
   const getMessageSenderId = (msg) => {
@@ -144,32 +161,42 @@ export default function Dashboard() {
     });
     socket.on("receive_message", (message) => {
       const chatId = normalizeId(message.chatId);
-      if (chatId !== normalizeId(activeChatIdRef.current)) return;
+      const isActiveChat = chatId === normalizeId(activeChatIdRef.current);
 
-      setMessages((prev) => {
-        if (!prev) return [message];
+      if (isActiveChat) {
+        setMessages((prev) => {
+          if (!prev) return [message];
 
-        const filtered = prev.filter((m) => {
-          if (!m.pending) return true;
-          const sameText = m.text === message.text;
-          const senderA = normalizeId(m.sender);
-          const senderB = normalizeId(message.sender);
-          const sameSender = senderA && senderB && senderA === senderB;
-          const sameTime = Math.abs(new Date(m.createdAt) - new Date(message.createdAt)) < 3000;
-          return !(sameText && sameSender && sameTime);
+          const filtered = prev.filter((m) => {
+            if (!m.pending) return true;
+            const sameText = m.text === message.text;
+            const senderA = normalizeId(m.sender);
+            const senderB = normalizeId(message.sender);
+            const sameSender = senderA && senderB && senderA === senderB;
+            const sameTime = Math.abs(new Date(m.createdAt) - new Date(message.createdAt)) < 3000;
+            return !(sameText && sameSender && sameTime);
+          });
+
+          if (filtered.some((m) => m._id === message._id)) return filtered;
+          return [...filtered, message];
         });
+      }
 
-        if (filtered.some((m) => m._id === message._id)) return filtered;
-        return [...filtered, message];
-      });
-
-      setChats((prev) =>
-        prev.map((c) =>
+      setChats((prev) => {
+        const next = prev.map((c) =>
           normalizeId(c._id) === chatId
-            ? { ...c, lastMessage: { text: message.text, createdAt: message.createdAt } }
+            ? {
+                ...c,
+                lastMessage: { text: message.text, createdAt: message.createdAt },
+                unreadCount: isActiveChat ? 0 : (c.unreadCount || 0) + 1,
+              }
             : c
-        )
-      );
+        );
+
+        const updatedChat = next.find((c) => normalizeId(c._id) === chatId);
+        if (!updatedChat) return prev;
+        return [updatedChat, ...next.filter((c) => normalizeId(c._id) !== chatId)];
+      });
     });
 
     return () => socket.disconnect();
@@ -246,6 +273,7 @@ export default function Dashboard() {
     setActiveChatId(chat._id);
     activeChatIdRef.current = chat._id;
     setActiveChat(chat);
+    setChats((prev) => promoteChat(prev, chat._id, { unreadCount: 0 }));
     setMessages([]);
     socketRef.current?.emit("join_chat", chat._id);
     try {
@@ -352,13 +380,10 @@ const handleCreateGroup = async () => {
     // 🔥 Optimistic UI (instant message)
     setMessages((prev) => [...(prev || []), tempMessage]);
 
-    setChats((prev) =>
-      prev.map((c) =>
-        c._id === activeChatId
-          ? { ...c, lastMessage: { text, createdAt: tempMessage.createdAt } }
-          : c
-      )
-    );
+    setChats((prev) => promoteChat(prev, activeChatId, {
+      lastMessage: { text, createdAt: tempMessage.createdAt },
+      unreadCount: 0,
+    }));
 
     // 🔥 send to backend via socket
     socketRef.current.emit("send_messages", {
@@ -372,6 +397,40 @@ const handleCreateGroup = async () => {
   const handleMsgKey = (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   };
+
+  const toggleEmojiPicker = () => setShowEmojiPicker((prev) => !prev);
+  const insertEmoji = (emoji) => {
+    const textarea = emojiInputRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart ?? newMsg.length;
+    const end = textarea.selectionEnd ?? newMsg.length;
+    const nextMsg = `${newMsg.slice(0, start)}${emoji}${newMsg.slice(end)}`;
+
+    setNewMsg(nextMsg);
+    setShowEmojiPicker(false);
+
+    window.requestAnimationFrame(() => {
+      textarea.focus();
+      const cursorPos = start + emoji.length;
+      textarea.setSelectionRange(cursorPos, cursorPos);
+    });
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!showEmojiPicker) return;
+      if (
+        emojiPickerRef.current && !emojiPickerRef.current.contains(event.target) &&
+        emojiToggleRef.current && !emojiToggleRef.current.contains(event.target)
+      ) {
+        setShowEmojiPicker(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showEmojiPicker]);
 
   // ── scroll to bottom on new messages ─────────────────────────────────────
   useEffect(() => {
@@ -535,7 +594,7 @@ const handleCreateGroup = async () => {
               </div>
             ) : (
               <>
-                <div className="ns-search-label">People on Nova</div>
+                <div className="ns-search-label">People on Talkhub</div>
                 {searchResults.map((user) => (
                   <div
                     key={user._id}
@@ -588,6 +647,11 @@ const handleCreateGroup = async () => {
                   <span className="ns-ci-time">
                     {formatTime(chat.lastMessage?.createdAt || chat.updatedAt)}
                   </span>
+                  {chat.unreadCount > 0 && (
+                    <span className="ns-ci-unread">
+                      {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
+                    </span>
+                  )}
                 </div>
               </div>
             );
@@ -659,8 +723,9 @@ const handleCreateGroup = async () => {
 
             {/* Input */}
             <div className="nc-input-area">
-              <button className="ns-icon-btn">📎</button>
+              <button className="ns-icon-btn" type="button">📎</button>
               <textarea
+                ref={emojiInputRef}
                 className="nc-textarea"
                 placeholder={`Message ${getChatDisplayName(activeChat)}…`}
                 value={newMsg}
@@ -683,7 +748,31 @@ const handleCreateGroup = async () => {
                 }}
                 onKeyDown={handleMsgKey}
               />
-              <button className="ns-icon-btn">😊</button>
+              <div className="nc-emoji-group">
+                <button
+                  type="button"
+                  className="ns-icon-btn"
+                  ref={emojiToggleRef}
+                  onClick={toggleEmojiPicker}
+                  aria-label="Open emoji picker"
+                >
+                  😊
+                </button>
+                {showEmojiPicker && (
+                  <div className="nc-emoji-picker" ref={emojiPickerRef}>
+                    {EMOJI_LIST.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        className="nc-emoji-btn"
+                        onClick={() => insertEmoji(emoji)}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 className={`nc-send-btn${sending ? " loading" : ""}`}
                 onClick={sendMessage}

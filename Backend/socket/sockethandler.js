@@ -30,9 +30,13 @@ const socketHandler = (io) => {
          socket.to(chatId).emit("stop_typing", { chatId, userId: socket.user });});
 
       // join chat room 
-      socket.on("join_chat", (chatId) => {
-      socket.join(chatId);
-    });
+      socket.on("join_chat", async (chatId) => {
+         socket.join(chatId);
+         // Reset unread count for this user in this chat
+         await Chat.findByIdAndUpdate(chatId, {
+            $set: { [`unreadCounts.${socket.user}`]: 0 }
+         });
+      });
 
 
       // now sending the messages
@@ -49,6 +53,15 @@ const socketHandler = (io) => {
         await Chat.findByIdAndUpdate(chatId, {
           lastMessage: newMessage._id
         });
+
+        // Increment unread counts for other members
+        const chat = await Chat.findById(chatId);
+        const otherMembers = chat.members.filter(member => member.toString() !== socket.user.toString());
+        const updateOps = {};
+        otherMembers.forEach(member => {
+          updateOps[`unreadCounts.${member}`] = (chat.unreadCounts.get(member.toString()) || 0) + 1;
+        });
+        await Chat.findByIdAndUpdate(chatId, { $set: updateOps });
 
         // populate sender
         const fullMessage = await Message.findById(newMessage._id)

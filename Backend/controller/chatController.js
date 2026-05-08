@@ -35,9 +35,19 @@ exports.getchats = async (req, res) => {
       members: userId
     })
       .populate("members", "name email")
+      .populate({
+        path: "lastMessage",
+        populate: { path: "sender", select: "name email" }
+      })
       .sort({ createdAt: -1 });
 
-    res.json(chats);
+    // Add unreadCount for current user
+    const chatsWithUnread = chats.map(chat => ({
+      ...chat.toObject(),
+      unreadCount: chat.unreadCounts.get(userId.toString()) || 0
+    }));
+
+    res.json(chatsWithUnread);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
