@@ -63,14 +63,14 @@ Built as a learning and portfolio project to demonstrate real-time communication
 ![Login](./Screenshots/login.png)
 
 ### 💬 Chat Dashboard
-![Dashboard](./Screenshots/dashboard.png)
+![Dashboard](./Screenshots/Dashboard.png)
 
 ### 🟢 Real-Time Messaging
 ![Messaging](./Screenshots/chatboard.png)
 
 ---
 
-## ⚙️ Installation & Setup
+## ⚙️ Installation & Setu
 
 ### Clone the repository
 
