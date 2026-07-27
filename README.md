@@ -65,7 +65,7 @@ Built as a learning and portfolio project to demonstrate real-time communication
 
 ---
 
-## ⚙️ Installation & Setu
+## ⚙️ Installation & Setup
 
 ### Clone the repository
 
